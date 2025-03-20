@@ -1,0 +1,46 @@
+name: Autograding Tests
+'on':
+- workflow_dispatch
+- repository_dispatch
+permissions:
+  checks: write
+  actions: read
+  contents: read
+jobs:
+  run-autograding-tests:
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-classroom[bot]'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    - name: no args
+      id: no-args
+      uses: classroom-resources/autograding-io-grader@v1
+      with:
+        test-name: no args
+        setup-command: cd src/requirement && docker build -t cmpsh .
+        command: docker run -i --memory 6MB cmpsh:latest test_scripts/no_args.sh
+        input: ''
+        expected-output: '2025'
+        comparison-method: contains
+        timeout: 10
+        max-score: 1
+    - name: single arg
+      id: single-arg
+      uses: classroom-resources/autograding-io-grader@v1
+      with:
+        test-name: single arg
+        setup-command: cd src/requirement && docker build -t cmpsh .
+        command: docker run -i --memory 6MB cmpsh:latest test_scripts/single_arg.sh
+        input: ''
+        expected-output: hello
+        comparison-method: exact
+        timeout: 10
+        max-score: 1
+    - name: Autograding Reporter
+      uses: classroom-resources/autograding-grading-reporter@v1
+      env:
+        NO-ARGS_RESULTS: "${{steps.no-args.outputs.result}}"
+        SINGLE-ARG_RESULTS: "${{steps.single-arg.outputs.result}}"
+      with:
+        runners: no-args,single-arg
