@@ -37,10 +37,38 @@ jobs:
         comparison-method: exact
         timeout: 10
         max-score: 1
+    - name: built-in
+      id: built-in
+      uses: classroom-resources/autograding-io-grader@v1
+      with:
+        test-name: built-in
+        setup-command: cd src/requirement && docker build -t cmpsh .
+        command: docker run -i --memory 6MB cmpsh:latest test_scripts/built_in.sh
+        input: ''
+        expected-output: |-
+          /app
+          /app/test_scripts
+        comparison-method: exact
+        timeout: 10
+        max-score: 2
+    - name: multiple args
+      id: multiple-args
+      uses: classroom-resources/autograding-io-grader@v1
+      with:
+        test-name: multiple args
+        setup-command: cd src/requirement && docker build -t cmpsh .
+        command: docker run -i --memory 6MB cmpsh:latest test_scripts/multiple_args.sh
+        input: ''
+        expected-output: hello world
+        comparison-method: exact
+        timeout: 10
+        max-score: 1
     - name: Autograding Reporter
       uses: classroom-resources/autograding-grading-reporter@v1
       env:
         NO-ARGS_RESULTS: "${{steps.no-args.outputs.result}}"
         SINGLE-ARG_RESULTS: "${{steps.single-arg.outputs.result}}"
+        BUILT-IN_RESULTS: "${{steps.built-in.outputs.result}}"
+        MULTIPLE-ARGS_RESULTS: "${{steps.multiple-args.outputs.result}}"
       with:
-        runners: no-args,single-arg
+        runners: no-args,single-arg,built-in,multiple-args
