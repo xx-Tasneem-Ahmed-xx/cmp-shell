@@ -75,29 +75,30 @@ jobs:
         comparison-method: exact
         timeout: 10
         max-score: 1
-    - name: unknown cmd
-      id: unknown-cmd
-      uses: classroom-resources/autograding-io-grader@v1
-      with:
-        test-name: unknown cmd
-        setup-command: cd src/requirement && docker build -t cmpsh .
-        command: docker run -i --memory 6MB cmpsh:latest test_scripts/unknown_cmd.sh
-        input: ''
-        expected-output: An error has occured!
-        comparison-method: exact
-        timeout: 10
-        max-score: 1
     - name: ls err
       id: ls-err
       uses: classroom-resources/autograding-io-grader@v1
       with:
         test-name: ls err
         setup-command: cd src/requirement && docker build -t cmpsh .
-        command: docker run -i --memory 6MB cmpsh:latest test_scripts/ls_err.sh
+        command: docker run -i --memory 6MB -a stdout -a stderr cmpsh:latest test_scripts/ls_err.sh
+          2>&1
         input: ''
         expected-output: |-
           ls: invalid option -- 'z'
           Try 'ls --help' for more information.
+        comparison-method: exact
+        timeout: 10
+        max-score: 1
+    - name: path
+      id: path
+      uses: classroom-resources/autograding-io-grader@v1
+      with:
+        test-name: path
+        setup-command: cd src/requirement && docker build -t cmpsh .
+        command: docker run -i --memory 6MB cmpsh:latest test_scripts/path.sh
+        input: ''
+        expected-output: Hello, World!
         comparison-method: exact
         timeout: 10
         max-score: 1
@@ -109,7 +110,7 @@ jobs:
         BUILT-IN_RESULTS: "${{steps.built-in.outputs.result}}"
         MULTIPLE-ARGS_RESULTS: "${{steps.multiple-args.outputs.result}}"
         REDIRECT_RESULTS: "${{steps.redirect.outputs.result}}"
-        UNKNOWN-CMD_RESULTS: "${{steps.unknown-cmd.outputs.result}}"
         LS-ERR_RESULTS: "${{steps.ls-err.outputs.result}}"
+        PATH_RESULTS: "${{steps.path.outputs.result}}"
       with:
-        runners: no-args,single-arg,built-in,multiple-args,redirect,unknown-cmd,ls-err
+        runners: no-args,single-arg,built-in,multiple-args,redirect,ls-err,path
