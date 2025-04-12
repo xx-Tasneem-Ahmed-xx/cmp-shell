@@ -102,6 +102,38 @@ jobs:
         comparison-method: exact
         timeout: 10
         max-score: 1
+    - name: pipe
+      id: pipe
+      uses: classroom-resources/autograding-io-grader@v1
+      with:
+        test-name: pipe
+        setup-command: cd src/requirement && docker build -t cmpsh .
+        command: docker run -i --memory 6MB cmpsh:latest test_scripts/pipe.sh
+        input: ''
+        expected-output: |-
+          B
+          A
+          C
+          X
+        comparison-method: exact
+        timeout: 10
+        max-score: 4
+    - name: multi pipe
+      id: multi-pipe
+      uses: classroom-resources/autograding-io-grader@v1
+      with:
+        test-name: multi pipe
+        setup-command: cd src/requirement && docker build -t cmpsh .
+        command: docker run -i --memory 6MB cmpsh:latest test_scripts/multi_pipe.sh
+        input: ''
+        expected-output: |-
+          A
+          B
+          C
+          X
+        comparison-method: exact
+        timeout: 10
+        max-score: 3
     - name: Autograding Reporter
       uses: classroom-resources/autograding-grading-reporter@v1
       env:
@@ -112,5 +144,7 @@ jobs:
         REDIRECT_RESULTS: "${{steps.redirect.outputs.result}}"
         LS-ERR_RESULTS: "${{steps.ls-err.outputs.result}}"
         PATH_RESULTS: "${{steps.path.outputs.result}}"
+        PIPE_RESULTS: "${{steps.pipe.outputs.result}}"
+        MULTI-PIPE_RESULTS: "${{steps.multi-pipe.outputs.result}}"
       with:
-        runners: no-args,single-arg,built-in,multiple-args,redirect,ls-err,path
+        runners: no-args,single-arg,built-in,multiple-args,redirect,ls-err,path,pipe,multi-pipe
