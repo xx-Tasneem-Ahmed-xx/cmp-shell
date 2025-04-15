@@ -6,7 +6,7 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <sys/wait.h>
-
+#include <ctype.h>
 pid_t current_child = -1;
 
 void parentSignalHandler(int sig) {
@@ -128,7 +128,7 @@ int commandExternal(char *cmd, char **pathsArray, int *lastPath) {
 
         char *filePath = NULL;
         for (int j = 0; j < *lastPath; j++) {
-           if (filePath != NULL) {
+            if (filePath != NULL) {
                 free(filePath);
             }
 
@@ -143,7 +143,8 @@ int commandExternal(char *cmd, char **pathsArray, int *lastPath) {
             strcat(filePath, args[0]);
 
             execv(filePath, args);
-            fprintf(stderr, "An error has occured!\n");
+
+            exit(0);
         }
 
         free(filePath);
@@ -165,96 +166,158 @@ int numberOfOccurences(const char *string, char c) {
     }
     return count;
 }
+char** getCommandsArray(char* cmd) {
+    char** commands = malloc(sizeof(char*) * 10); // Start with space for 10 commands
+    int count = 0;
+    char* saveptr;
+    char* token = strtok_r(cmd, "|", &saveptr);
 
-char **getCommandsArray(const char *string) {
-    char *s = strdup(string);
-    int count = numberOfOccurences(s, '|');
-    char **array = malloc((count + 2) * sizeof(char *)); // Allocate memory for the array
-    if (array == NULL) {
-        perror("malloc failed");
-        exit(EXIT_FAILURE);
-    }
-    char *token = strtok(s, " | ");
-    int i = 0;
     while (token != NULL) {
-        array[i++] = strdup(token);
-        token = strtok(NULL, " | ");
+        // Trim whitespace from the token
+        while (*token == ' ' || *token == '\t') token++;
+        char* end = token + strlen(token) - 1;
+        while (end > token && (*end == ' ' || *end == '\t')) end--;
+        *(end + 1) = '\0';
+
+        commands[count] = strdup(token);
+        count++;
+
+        if (count % 10 == 0) {
+            commands = realloc(commands, sizeof(char*) * (count + 10));
+        }
+
+        token = strtok_r(NULL, "|", &saveptr);
     }
-    array[i] = NULL;
-    free(s);
-    return array;
+
+    commands[count] = NULL; // NULL-terminate the array
+    return commands;
 }
 
-void pipedCommand(const char *cmd) {
-    const int numPipes = numberOfOccurences(cmd, '|');
-    int pipe_arr[numPipes][2];
-    char **commandsArray = getCommandsArray(cmd);
+char **parse_command_args(char *cmd, int *arg_count) {
+    // Skip leading whitespace
+    while (*cmd == ' ' || *cmd == '\t') cmd++;
 
-    for (int i = 0; i < numPipes; i++) {
-        if (pipe(pipe_arr[i]) == -1) {
-            fprintf(stderr, "An error has occured!\n");
-            exit(0);
+    char **args = malloc(sizeof(char*));
+    *arg_count = 0;
+    char *current = cmd;
+    int in_quotes = 0;
+    char quote_char = 0;
+
+    while (*current) {
+        if (!in_quotes && (*current == ' ' || *current == '\t')) {
+            *current = '\0';
+            args = realloc(args, (*arg_count + 1) * sizeof(char*));
+            args[(*arg_count)++] = cmd;
+
+            current++;
+            while (*current == ' ' || *current == '\t') current++;
+            cmd = current;
+            continue;
         }
-    }
 
-    for (int i = 0; i < numPipes + 1; i++) {
-        int pid = fork();
-        if (pid == -1) {
-            fprintf(stderr, "An error has occured!\n");
-            exit(0);
-        } else if (pid == 0) {
-            if (i == 0) {
-                dup2(pipe_arr[i][1], STDOUT_FILENO);
-            } else if (i == numPipes) {
-                dup2(pipe_arr[i - 1][0], STDIN_FILENO);
+        if (*current == '\'' || *current == '"') {
+            if (!in_quotes) {
+                quote_char = *current;
+                in_quotes = 1;
+                memmove(current, current+1, strlen(current));
+            } else if (*current == quote_char) {
+                in_quotes = 0;
+                memmove(current, current+1, strlen(current));
             } else {
-                dup2(pipe_arr[i - 1][0], STDIN_FILENO);
-                dup2(pipe_arr[i][1], STDOUT_FILENO);
+                current++;
             }
-            for (int j = 0; j < numPipes; j++) {
-                close(pipe_arr[j][0]);
-                close(pipe_arr[j][1]);
-            }
-
-            char filePath[256];
-            snprintf(filePath, sizeof(filePath), "/bin/%s", commandsArray[i]);
-
-            //TODO toeknize the command
-            char *args[100] ;
-            int arg_i = 0;
-            char *token = strtok(commandsArray[i], " ");
-            while (token != NULL) {
-                if (token[0] == '"') {
-                    token++;
-                }
-                if (token[strlen(token) - 1] == '"') {
-                    token[strlen(token) - 1] = '\0';
-                }
-                args[arg_i++] = token;
-                token = strtok(NULL, " ");
-            }
-            args[arg_i] = NULL;
-
-            execv(filePath, args);
-
-            fprintf(stderr, "An error has occured!\n");
-            exit(0);
+            continue;
         }
-    }
-    for (int k = 0; k < numPipes; k++) {
-        close(pipe_arr[k][0]);
-        close(pipe_arr[k][1]);
+
+        current++;
     }
 
-    // Wait for all child processes to finish
-    for (int k = 0; k < numPipes + 1; k++) {
-        wait(NULL);
+    // Add the last argument
+    if (*cmd) {
+        args = realloc(args, (*arg_count + 1) * sizeof(char*));
+        args[(*arg_count)++] = cmd;
     }
-    // for (int j = 0; commandsArray[j] != NULL; j++) {
-    //     free(commandsArray[j]);
-    // }
-    // free(commandsArray);
+
+    // NULL terminate
+    args = realloc(args, (*arg_count + 1) * sizeof(char*));
+    args[*arg_count] = NULL;
+
+    return args;
 }
+
+  void pipedCommand(char *cmd, char **pathsArray,  int *lastPath) {
+      const int numPipes = numberOfOccurences(cmd, '|');
+      int pipe_arr[numPipes][2];
+      char **commandsArray = getCommandsArray(cmd);
+
+      for (int i = 0; i < numPipes; i++) {
+          if (pipe(pipe_arr[i]) == -1) {
+              exit(EXIT_FAILURE);
+          }
+      }
+
+      for (int i = 0; i < numPipes + 1; i++) {
+          int pid = fork();
+
+          if (pid == -1) {
+              exit(EXIT_FAILURE);
+          }
+
+          if (pid == 0) {
+              // Set up output redirection for all except first pipe
+              if (i != 0) {
+                  dup2(pipe_arr[i-1][0], STDIN_FILENO);
+              }
+
+              // Set up output redirection for all except last pipe
+              if (i != numPipes) {
+                  dup2(pipe_arr[i][1], STDOUT_FILENO);
+              }
+
+              // Close all pipe ends in child
+              for (int j = 0; j < numPipes; j++) {
+                  close(pipe_arr[j][0]);
+                  close(pipe_arr[j][1]);
+              }
+
+              // Parse the current command
+              int arg_count = 0;
+              char** args = parse_command_args(commandsArray[i], &arg_count);
+              if (!args) {
+                  _exit(EXIT_FAILURE);
+              }
+
+              char filePath[512];
+
+              for (int j = 0; j < *lastPath; j++) {
+                  strcpy(filePath, pathsArray[j]);
+                  strcat(filePath, "/");
+                  strcat(filePath, args[0]);
+                  execv(filePath, args);
+              }
+
+              _exit(EXIT_FAILURE);
+          }
+      }
+
+      // Parent process close all pipe ends
+      for (int j = 0; j < numPipes; j++) {
+          close(pipe_arr[j][0]);
+          close(pipe_arr[j][1]);
+      }
+
+      // Wait for all children
+      for (int k = 0; k < numPipes + 1; k++) {
+          wait(NULL);
+      }
+
+      // Clean up commands array
+      for (int j = 0; commandsArray[j] != NULL; j++) {
+          free(commandsArray[j]);
+      }
+      free(commandsArray);
+  }
+
 
 int analyzeCommand(char *cmd, char **pathsArray, int *lastPath) {
     int statusCode = 0;
@@ -272,7 +335,7 @@ int analyzeCommand(char *cmd, char **pathsArray, int *lastPath) {
         free(cmd);
         exit(0);
     } else if (strchr(cmd, '|') != NULL) {
-        pipedCommand(cmd);
+        pipedCommand(cmd, pathsArray, lastPath);
     } else if (strcmp(token, "cd") == 0) {
         char *directory = strtok(0, " \0");
         commandCD(directory);
@@ -304,10 +367,7 @@ void executeCommandsFromFile(const char *filename, char **pathsArray, int *lastP
             continue;
         }
 
-        int status = analyzeCommand(cmd, pathsArray, lastPath);
-        if (status != 0) {
-            fprintf(stderr, "An error has occured!\n");
-        }
+        analyzeCommand(cmd, pathsArray, lastPath);
     }
 
     free(cmd); // Free getline buffer
@@ -343,9 +403,8 @@ int main(int argc, char *argv[]) {
             if (command == "")
                 continue;
 
-            int status = analyzeCommand(command, paths, &lastPath);
-            if (status != 0)
-                fprintf(stderr, "An error has occured!\n");
+
+            analyzeCommand(command, paths, &lastPath);
         }
     }
     return 0;
