@@ -137,6 +137,8 @@ int commandExternal(char *cmd, char **pathsArray, int *lastPath) {
             strcat(filePath, args[0]);
 
             execv(filePath, args);
+            fprintf(stderr, "An error has occurred!\n");
+            exit(EXIT_FAILURE);
         }
 
         free(filePath);
@@ -255,7 +257,7 @@ int analyzeCommand(char *cmd, char **pathsArray, int *lastPath) {
         commandCD(directory);
     } else if (strcmp(cmd, "pwd") == 0) {
         commandPWD();
-    } else if (strcmp(token, "paths") == 0) {
+    } else if (strcmp(token, "path") == 0) {
         char *files = strtok(0, " \0");
         commandPATHS(files, pathsArray, lastPath);
     } else {
