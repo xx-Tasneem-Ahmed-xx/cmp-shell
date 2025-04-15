@@ -114,15 +114,21 @@ int commandExternal(char *cmd, char **pathsArray, int *lastPath) {
 
         char *token = strtok(cmd, " ");
         while (token != NULL) {
+            // if (token[0] == '"') {
+            //     token++;
+            // }
+            // if (token[strlen(token) - 1] == '"') {
+            //     token[strlen(token) - 1] = '\0';
+            // }
             args[i++] = token;
             token = strtok(NULL, " ");
         }
         args[i] = NULL;
 
 
-        char *filePath;
+        char *filePath = NULL;
         for (int j = 0; j < *lastPath; j++) {
-            if (j > 0) {
+           if (filePath != NULL) {
                 free(filePath);
             }
 
@@ -137,13 +143,14 @@ int commandExternal(char *cmd, char **pathsArray, int *lastPath) {
             strcat(filePath, args[0]);
 
             execv(filePath, args);
+            fprintf(stderr, "An error has occured!\n");
         }
 
         free(filePath);
-        exit(-1);
+        exit(0);
     } else {
         current_child = pid;
-         wait(&status);
+        wait(&status);
         current_child = -1;
     }
     return status;
@@ -185,16 +192,16 @@ void pipedCommand(const char *cmd) {
 
     for (int i = 0; i < numPipes; i++) {
         if (pipe(pipe_arr[i]) == -1) {
-            fprintf(stderr, "An error has occurred!\n");
-            exit(-1);
+            fprintf(stderr, "An error has occured!\n");
+            exit(0);
         }
     }
 
     for (int i = 0; i < numPipes + 1; i++) {
         int pid = fork();
         if (pid == -1) {
-            fprintf(stderr, "An error has occurred!\n");
-            exit(-1);
+            fprintf(stderr, "An error has occured!\n");
+            exit(0);
         } else if (pid == 0) {
             if (i == 0) {
                 dup2(pipe_arr[i][1], STDOUT_FILENO);
@@ -212,9 +219,25 @@ void pipedCommand(const char *cmd) {
             char filePath[256];
             snprintf(filePath, sizeof(filePath), "/bin/%s", commandsArray[i]);
 
-            char *args[] = {commandsArray[i], NULL};
+            //TODO toeknize the command
+            char *args[100] ;
+            int arg_i = 0;
+            char *token = strtok(commandsArray[i], " ");
+            while (token != NULL) {
+                if (token[0] == '"') {
+                    token++;
+                }
+                if (token[strlen(token) - 1] == '"') {
+                    token[strlen(token) - 1] = '\0';
+                }
+                args[arg_i++] = token;
+                token = strtok(NULL, " ");
+            }
+            args[arg_i] = NULL;
+
             execv(filePath, args);
-            fprintf(stderr, "An error has occurred!\n");
+
+            fprintf(stderr, "An error has occured!\n");
             exit(0);
         }
     }
@@ -227,10 +250,10 @@ void pipedCommand(const char *cmd) {
     for (int k = 0; k < numPipes + 1; k++) {
         wait(NULL);
     }
-    for (int j = 0; commandsArray[j] != NULL; j++) {
-        free(commandsArray[j]);
-    }
-    free(commandsArray);
+    // for (int j = 0; commandsArray[j] != NULL; j++) {
+    //     free(commandsArray[j]);
+    // }
+    // free(commandsArray);
 }
 
 int analyzeCommand(char *cmd, char **pathsArray, int *lastPath) {
@@ -255,7 +278,7 @@ int analyzeCommand(char *cmd, char **pathsArray, int *lastPath) {
         commandCD(directory);
     } else if (strcmp(cmd, "pwd") == 0) {
         commandPWD();
-    } else if (strcmp(token, "paths") == 0) {
+    } else if (strcmp(token, "path") == 0) {
         char *files = strtok(0, " \0");
         commandPATHS(files, pathsArray, lastPath);
     } else {
@@ -283,7 +306,7 @@ void executeCommandsFromFile(const char *filename, char **pathsArray, int *lastP
 
         int status = analyzeCommand(cmd, pathsArray, lastPath);
         if (status != 0) {
-            fprintf(stderr, "An error has occurred!\n");
+            fprintf(stderr, "An error has occured!\n");
         }
     }
 
@@ -322,7 +345,7 @@ int main(int argc, char *argv[]) {
 
             int status = analyzeCommand(command, paths, &lastPath);
             if (status != 0)
-                fprintf(stderr, "An error has occured!");
+                fprintf(stderr, "An error has occured!\n");
         }
     }
     return 0;
