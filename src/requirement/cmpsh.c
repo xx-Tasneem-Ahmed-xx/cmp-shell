@@ -91,72 +91,6 @@ void commandPATHS(char *path, char **pathsArray, int *lastPath) {
     }
 }
 
-int commandExternal(char *cmd, char **pathsArray, int *lastPath) {
-    int status = 0;
-    int pid;
-    pid = fork();
-
-    if (pid == -1)
-        return -1;
-
-    if (pid == 0) {
-        signal(SIGINT, SIG_DFL);
-        signal(SIGTSTP, SIG_DFL);
-
-        char *args[100];
-        int i = 0;
-
-        char *redirect_file;
-        if (isRedirectable(cmd, &redirect_file)) {
-            outputToFile(redirect_file);
-            free(redirect_file);
-        }
-
-        char *token = strtok(cmd, " ");
-        while (token != NULL) {
-            // if (token[0] == '"') {
-            //     token++;
-            // }
-            // if (token[strlen(token) - 1] == '"') {
-            //     token[strlen(token) - 1] = '\0';
-            // }
-            args[i++] = token;
-            token = strtok(NULL, " ");
-        }
-        args[i] = NULL;
-
-
-        char *filePath = NULL;
-        for (int j = 0; j < *lastPath; j++) {
-            if (filePath != NULL) {
-                free(filePath);
-            }
-
-            filePath = malloc(strlen(pathsArray[j]) + strlen(args[0]) + 2);
-            //one for the null terminator and the other for backslash
-            if (filePath == NULL)
-                return -1;
-
-            // creating command file path
-            strcpy(filePath, pathsArray[j]);
-            strcat(filePath, "/");
-            strcat(filePath, args[0]);
-
-            execv(filePath, args);
-
-            exit(0);
-        }
-
-        free(filePath);
-        exit(0);
-    } else {
-        current_child = pid;
-        wait(&status);
-        current_child = -1;
-    }
-    return status;
-}
-
 int numberOfOccurences(const char *string, char c) {
     const char *ptr = string;
     int count = 0;
@@ -319,63 +253,10 @@ char **parse_command_args(char *cmd, int *arg_count) {
   }
 
 
-int analyzeCommand(char *cmd, char **pathsArray, int *lastPath) {
-    int statusCode = 0;
-    char *cmd_copy = malloc(strlen(cmd) + 1);
 
-    if (cmd_copy == NULL)
-        return -1;
-
-    strcpy(cmd_copy, cmd);
-
-    char *token = strtok(cmd_copy, " ");
-
-    if (strcmp(cmd, "exit") == 0) {
-        free(cmd_copy);
-        free(cmd);
-        exit(0);
-    } else if (strchr(cmd, '|') != NULL) {
-        pipedCommand(cmd, pathsArray, lastPath);
-    } else if (strcmp(token, "cd") == 0) {
-        char *directory = strtok(0, " \0");
-        commandCD(directory);
-    } else if (strcmp(cmd, "pwd") == 0) {
-        commandPWD();
-    } else if (strcmp(token, "path") == 0) {
-        char *files = strtok(0, " \0");
-        commandPATHS(files, pathsArray, lastPath);
-    } else {
-        statusCode = commandExternal(cmd, pathsArray, lastPath);
-    }
-    free(cmd_copy);
-    return statusCode;
-}
-
-void executeCommandsFromFile(const char *filename, char **pathsArray, int *lastPath) {
-    FILE *file = fopen(filename, "r");
-    if (file == NULL) {
-        return;
-    }
-
-    char *cmd = NULL;
-    size_t size = 0;
-
-    while (getline(&cmd, &size, file) != -1) {
-        cmd[strcspn(cmd, "\n")] = '\0';
-
-        if (strlen(cmd) == 0) {
-            continue;
-        }
-
-        analyzeCommand(cmd, pathsArray, lastPath);
-    }
-
-    free(cmd); // Free getline buffer
-    fclose(file);
-    exit(0);
-}
-
-
+void executeCommandsFromFile(const char *filename, char **pathsArray, int *lastPath);
+int commandExternal(char *cmd, char **pathsArray, int *lastPath);
+int analyzeCommand(char *cmd, char **pathsArray, int *lastPath);
 void parentProcessHandler(int signum);
 
 int main(int argc, char *argv[]) {
@@ -408,4 +289,123 @@ int main(int argc, char *argv[]) {
         }
     }
     return 0;
+}
+
+int commandExternal(char *cmd, char **pathsArray, int *lastPath) {
+    int status = 0;
+    int pid;
+    pid = fork();
+
+    if (pid == -1)
+        return -1;
+
+    if (pid == 0) {
+        signal(SIGINT, SIG_DFL);
+        signal(SIGTSTP, SIG_DFL);
+
+        char *args[100];
+        int i = 0;
+
+        char *redirect_file;
+        if (isRedirectable(cmd, &redirect_file)) {
+            outputToFile(redirect_file);
+            free(redirect_file);
+        }
+
+        char *token = strtok(cmd, " ");
+        while (token != NULL) {
+            args[i++] = token;
+            token = strtok(NULL, " ");
+        }
+        args[i] = NULL;
+
+
+        char *filePath = NULL;
+        for (int j = 0; j < *lastPath; j++) {
+            if (filePath != NULL) {
+                free(filePath);
+            }
+
+            filePath = malloc(strlen(pathsArray[j]) + strlen(args[0]) + 2);
+            //one for the null terminator and the other for backslash
+            if (filePath == NULL)
+                return -1;
+
+            // creating command file path
+            strcpy(filePath, pathsArray[j]);
+            strcat(filePath, "/");
+            strcat(filePath, args[0]);
+
+            execv(filePath, args);
+        }
+
+        free(filePath);
+        exit(0);
+    } else {
+        current_child = pid;
+        wait(&status);
+        current_child = -1;
+    }
+    return status;
+}
+
+void executeCommandsFromFile(const char *filename, char **pathsArray, int *lastPath) {
+    FILE *file = fopen(filename, "r");
+    if (file == NULL) {
+        return;
+    }
+
+    char *cmd = NULL;
+    size_t size = 0;
+
+    while (getline(&cmd, &size, file) != -1) {
+        cmd[strcspn(cmd, "\n")] = '\0';
+
+        if (strlen(cmd) == 0) {
+            continue;
+        }
+        if (strstr(cmd, "./"))
+            commandExternal(cmd, pathsArray, lastPath);
+        else analyzeCommand(cmd, pathsArray, lastPath);
+    }
+
+    free(cmd); // Free getline buffer
+    fclose(file);
+    exit(0);
+}
+int analyzeCommand(char *cmd, char **pathsArray, int *lastPath) {
+    int statusCode = 0;
+    char *cmd_copy = malloc(strlen(cmd) + 1);
+
+    if (cmd_copy == NULL)
+        return -1;
+
+    strcpy(cmd_copy, cmd);
+
+    char *token = strtok(cmd_copy, " ");
+
+    if (strcmp(cmd, "exit") == 0) {
+        free(cmd_copy);
+        free(cmd);
+        exit(0);
+    }
+    if (strchr(cmd, '|') != NULL) {
+        pipedCommand(cmd, pathsArray, lastPath);
+    } else if (strcmp(token, "cd") == 0) {
+        char *directory = strtok(0, " \0");
+        commandCD(directory);
+    } else if (strcmp(cmd, "pwd") == 0) {
+        commandPWD();
+    } else if (strcmp(token, "path") == 0) {
+        char *files = strtok(0, " \0");
+        commandPATHS(files, pathsArray, lastPath);
+    }
+    else if (strstr(token, "./") != NULL) {
+        executeCommandsFromFile(cmd, pathsArray, lastPath);
+    }
+    else {
+        statusCode = commandExternal(cmd, pathsArray, lastPath);
+    }
+    free(cmd_copy);
+    return statusCode;
 }
