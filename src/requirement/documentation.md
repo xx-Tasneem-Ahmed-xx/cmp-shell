@@ -1,157 +1,69 @@
-# cmpsh - Command Shell
+# cmpsh Shell
+A shell is a command-line interface that allows users to interact with the operating system by entering commands. It acts as an intermediary between the user and the operating system's services, interpreting user commands and executing them. Shells can execute built-in commands, run external programs, and manage processes. Common examples of shells include Bash, Zsh, and Fish. Shells can be run in an interactive mode as when you open a new terminal (it invokes `bash` without arguments) or in a non-interactive mode as when you run a script (invoking `bash` with a file path argument).
 
-## 1. Introduction
+## Overview
+`cmpsh` is a custom shell program written in C that provides basic shell functionality that can be run in interactive or non-interactive mode.
 
-**cmpsh** (Command Shell) is a command-line interpreter implemented in C. It provides an interface for users to execute commands, including external programs found in specified paths, and offers several built-in functionalities. This version supports command piping, output redirection, dynamic path management, and execution of commands from a file.
+The shell is very simple (conceptually): it runs in a while loop, repeatedly asking for input (prints a prompt `cmpsh> `) to tell it what command to execute. It then executes that command. The loop continues indefinitely, until the user types the built-in command `exit`, at which point it exits.
 
-## 2. Compilation and Execution
+## Features
+### Built-in Commands
 
-- To compile, run:
-  ```bash
-  make
-  ```
-- To execute, run:
-  ```bash
-  ./cmpsh
-  ```
+Every shell needs to support a number of built-in commands, which are functions in the shell itself, not external programs. For example, the exit command needs to be implemented as a built-in command, because it exits the shell itself.
 
-### Modes of Operation
-
-- **Interactive Mode**: Run the shell directly to enter commands one by one.
-- **Non-Interactive Mode**: Provide a filename as a command-line argument. `cmpsh` will read and execute commands from this file line by line, then exit.
-
-Example:
-
-```bash
-./cmpsh <script_filename>
-```
-
-## 3. Features and Usage
-
-### a) Command Prompt
-
-In interactive mode, the shell indicates readiness with the `cmpsh>` prompt.
-
-### b) Command Execution
-
-Enter a command followed by its arguments and press Enter. cmpsh determines how to handle the command:
-
-- **Built-in Commands**: Handled directly by the shell.
-- **Piped Commands**: Commands linked by `|`.
-- **External Commands**: Executable programs found in the configured search paths.
-
-### c) Built-in Commands
-
-- `exit`: Terminates the cmpsh shell.
-- `pwd`: Prints the current working directory.
+- `exit`: Exits the shell program.
 - `cd <directory>`: Changes the current working directory.
-    - Supports relative (., ..) and absolute (/) paths.
-- `path`: Manages the search path list.
-    - `path` with no arguments: Clears the search path.
-    - `path <dir1> [<dir2> ...]`: Adds directories to the search path.
+- `pwd`: Prints the current working directory.
+- `paths <path>...`: Overwrites the list of program search paths.
+    ```sh
+    cmpsh> path /bin /usr/bin
+    # Add /bin and /usr/bin to the search path of the shell
+    ```
+    - calling `paths` with no arguments shall set path to be empty and the shell should not be able to run any programs (except built-in commands).
 
-**Note:** Initially, `/bin` is the only directory in the search path.
+### External Commands
+- The shell should support executing external commands (`ls -a`, `wc`, `echo hello`, ..etc) by forking a child process by calling one of the functions from the `exec` family to run the new program.
+- It should first resolve the path of this program, find the executable in one of the directories specified by path and create a new process to run it.
+    - Your initial shell path should contain one directory: `/bin`
 
-### d) External Commands
 
-Any non-built-in, non-piped command is treated as external.
+### Signal Handling
+- The shell should propagate signals such as `SIGINT` (Ctrl+C) and `SIGTSTP` (Ctrl+Z) to the currently running child process.
+- The shell itself should not terminate when these signals are received even if no other program is running.
 
-- `cmpsh` searches executable files in its internal `pathsArray`.
-- Forks a new process and executes using `execv`.
-- Example: `ls -l`, `grep pattern file.txt`, `gcc myprog.c`
-
-### e) Output Redirection (`>`)
-
-- Redirects standard output to a file.
-- Syntax: `command [args...] > filename`
-- Overwrites if file exists; creates it otherwise.
-
-### f) Piping (`|`)
-
-- Connects the output of one command to the input of another.
-- Syntax: `command1 [args...] | command2 [args...] | ...`
-- Commands are parsed and executed with pipes.
-
-Example:
-
-```bash
-ls -1 | grep .c | wc -l
+### Redirection
+When running programs, it is useful to direct output to a file. The syntax `[process] > [file]` tells your shell to redirect the process’s standard output to a file. 
+```sh
+ls -la /tmp > output 
+# nothing should be printed on the screen. Instead, the standard output of the ls program should be rerouted to the file output
 ```
 
-### g) Argument Parsing
-
-- **Simple Commands**: Arguments split by spaces; quoted strings split.
-- **Piped Commands**: Quoted arguments treated as a single unit.
-
-Example:
-
-```bash
-grep 'search phrase' file.txt | wc -l
+### Non-interactive Mode
+- The shell is given an input file of commands; in this case, the shell should not read user input (from `stdin`) but rather from this file to get the commands to execute.
+- If you hit the end-of-file marker `EOF`, you should call `exit(0)` and exit gracefully.
 ```
-
-### h) Bash File Execution
-
-- Commands starting with `./` are treated as batch scripts.
-- Example:
-
-```bash
-cmpsh> ./my_script.txt
+Usage: bash> ./cmpsh myCmpshFile.sh
 ```
+### Reporting Errors
+There is a difference between errors that your shell catches and those that the program catches. Your shell should catch all the syntax errors specified in this project page. If the syntax of the command looks perfect, you simply run the specified program. If there are any program-related errors (e.g., invalid arguments to `ls` when you run it, for example), the shell does not have to worry about that (rather, the program will print its own error messages and exit).
+- For any shell error print to `stderr` "An error has occured!".
 
-### i) Signal Handling
+## Helpful Functions
+**Read the `man` page of each syscall for more info. (ex: `man strtok`)**
+- Tokenization: `strtok()`, `strtok_r()`
+- Process Management: `fork()`, `exec()`, `execv()` `wait()`, `waitpid()`
+- Program Checking: `access()`
+- Directory Management: `chdir()`, `getcwd()`
 
-- **Ctrl+C (SIGINT)**: Forwards signal to running child processes.
-- **Ctrl+Z (SIGTSTP)**: Forwarded to children; no job control.
+**Caution**
+Your program may end up creating too many processes than intended due to a bug (fork bomb). To prevent your self to be locked out of the system limit the number of processes you can create by adding this line to your `.bashrc` file in your home directory.
 
-**Note:** these signals won't affect the shell itself.
+`ulimit –u 100`
 
-## 4. Limitations
+## Deliverables
+1. Source code for `cmpsh`.
+2. A `Makefile` to build the program.
+    - Running `make` should produce an executable named `cmpsh`.
+3. Documentation on how to use the shell and its features.
 
-
-- Basic file execution; no variables, loops, or conditionals.
-- Ignores the system's `PATH`; uses its own `pathsArray`.
-
-## 5. Exiting cmpsh
-
-- Type `exit` and press Enter.
-- Press `Ctrl+D` at an empty prompt (EOF).
-
-## 6. Example Session
-
-```bash
-# Compile and run
-$ make
-$ ./cmpsh
-
-# Interactive session
-cmpsh> pwd
-/home/user/project
-cmpsh> path /usr/bin .
-cmpsh> ls
-cmpsh.c cmpsh
-cmpsh> mkdir output
-cmpsh> ls -la > output/listing.txt
-cmpsh> cat output/listing.txt
-... (contents of ls -la) ...
-cmpsh> echo 'Hello World with Spaces'
-'Hello World with Spaces'
-cmpsh> echo "Another Test" | wc -c
-13
-cmpsh> cd output
-cmpsh> pwd
-/home/user/project/output
-cmpsh> path
-cmpsh> ls
-Command not found
-cmpsh> /bin/ls
-listing.txt
-cmpsh> exit
-
-# Back in the original shell
-$
-```
-
----
-
-Enjoy using **cmp shell**!
-
+**Plagiarism will result in zero grade.**
